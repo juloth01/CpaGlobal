@@ -1,15 +1,21 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ClaimsParser
+﻿namespace ClaimsParser
 {
-    class Program
+    using System;
+    using System.IO;
+
+    public class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
+            string preParseClaim = File.ReadAllText(@"c:\claims.txt");
+
+            Parser claimsParser = new Parser(preParseClaim);
+
+            claimsParser.ParseClaims();
+
+            Console.WriteLine(claimsParser.JsonClaim);
+
+            Console.ReadKey();
         }
     }
 }
