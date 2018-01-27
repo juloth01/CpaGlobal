@@ -1,9 +1,12 @@
 ﻿/* ------------------------------------------------------------------------------------------
 Assumptions made in this iteration for Claims Parsing:
-    Claims always start out with digits followed by . at the beginning of a line
+    Claims always start out with digits followed by `.` at the beginning of a line
     Claims that are subclaims will always follow it's parent claim
-    All claim lines end in . 
-    I will get claification before refactoring - this is brute force method
+    All claim lines end in `.` 
+    
+Refactor #2
+    Parent claims (claims not part of any other) are assumed to be multi-lined
+    Recursive searching to add child claims
 ------------------------------------------------------------------------------------------ */
 
 namespace ClaimsParser
@@ -21,7 +24,9 @@ namespace ClaimsParser
 
     public class Parser
     {
-        private Regex claimIdRegex = new Regex(@"^(\d+)\.", RegexOptions.Singleline);
+        private Regex currentClaimIdRegex = new Regex(@"^(?<CurrentClaimId>\d+)\.\s(?<CurrentClaimText>.+)", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture);
+
+        private Regex parentClaimIdRegex = new Regex(@"The system of (?<ParentClaimId>claim \d+),\s(?<ParentClaimText>.+)|The method of (?<ParentClaimId>claim \d+),\s(?<ParentClaimText>.+)", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture);
 
         public Parser(string claims)
         {
@@ -37,37 +42,100 @@ namespace ClaimsParser
 
         public string JsonClaim { get; set; }
 
+        private List<Claim> claims = new List<Claim>();
+
+        private Claim ParentClaim { get; set; }
+
         public void ParseClaims()
         {
             List<string> claimLines = new List<string>();
             claimLines = this.RawClaim.Split(Environment.NewLine.ToCharArray()).ToList();
-            Dictionary<string, string> claims = new Dictionary<string, string>();
             string previousClaimId = string.Empty;
+
             foreach (string line in claimLines)
             {
-                Match matchResult = this.claimIdRegex.Match(line);
-                if (matchResult.Success)
+                Match currentClaimIdMatchResult = this.currentClaimIdRegex.Match(line);
+                if (currentClaimIdMatchResult.Success)
                 {
-                    previousClaimId = matchResult.Groups[1].Value;
-                    claims.Add($"Claim {previousClaimId}", "Test Claim text.");
+                    // This is the current Claim line - may be a parent/child/single - let's check
+                    Match parentClaimIdMatchResult = this.parentClaimIdRegex.Match(line);
+                    if (parentClaimIdMatchResult.Success)
+                    {
+                        string parentClaimId = parentClaimIdMatchResult.Groups["ParentClaimId"].Value;
+                        this.FindParentClaim(this.claims, parentClaimId);
+                        if (this.ParentClaim != null)
+                        {
+                            Claim childClaim = new Claim
+                            {
+                                ClaimId = $"claim {currentClaimIdMatchResult.Groups["CurrentClaimId"].Value}",
+                                ClaimText = parentClaimIdMatchResult.Groups["ParentClaimText"].Value,
+                                ParentClaimId = parentClaimId
+                            };
+
+                            this.ParentClaim.SubClaims.Add(childClaim);
+                        }
+                    }
+                    else
+                    {
+                        // this is not a child claim 
+                        Claim parentClaim = new Claim
+                        {
+                            ClaimId = $"claim {currentClaimIdMatchResult.Groups["CurrentClaimId"].Value}",
+                            ClaimText = currentClaimIdMatchResult.Groups["CurrentClaimText"].Value
+                        };
+
+                        previousClaimId = parentClaim.ClaimId;
+                        this.claims.Add(parentClaim);
+                    }
                 }
                 else
                 {
                     if (!string.IsNullOrEmpty(previousClaimId))
                     {
-                        string keyName = $"Claim {previousClaimId}";
-                        if (claims.ContainsKey(keyName))
+                        foreach (Claim claim in this.claims)
                         {
-                            claims[keyName] += line;
+                            if (claim.ClaimId.Equals(previousClaimId))
+                            {
+                                claim.ClaimText += $" {line}"; // append to the claim
+                            }
                         }
                     }
                 }
             }
 
-            this.JsonClaim = JsonConvert.SerializeObject(claims, Formatting.Indented);
+            this.JsonClaim = JsonConvert.SerializeObject(this.claims, Formatting.Indented);
 
         }
 
+        private void FindParentClaim(List<Claim> claimsList, string claimId)
+        {
+            this.ParentClaim = null;
 
+            foreach (Claim claim in claimsList)
+            {
+                if (this.ParentClaim == null)
+                {
+                    this.SearchChildClaims(claim, claimId);
+                }
+            }
+        }
+
+        public void SearchChildClaims(Claim childClaim, string claimId)
+        {
+            if (childClaim == null)
+            {
+                return;
+            }
+
+            if (childClaim.ClaimId.Equals(claimId))
+            {
+                this.ParentClaim = childClaim;
+            }
+
+            foreach (Claim subClaim in childClaim.SubClaims)
+            {
+                this.SearchChildClaims(subClaim, claimId);
+            }
+        }
     }
 }

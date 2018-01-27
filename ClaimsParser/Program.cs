@@ -12,7 +12,7 @@
             Parser claimsParser = new Parser(preParseClaim);
 
             claimsParser.ParseClaims();
-
+            
             Console.WriteLine(claimsParser.JsonClaim);
 
             Console.ReadKey();
