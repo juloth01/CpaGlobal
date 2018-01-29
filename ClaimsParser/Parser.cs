@@ -52,8 +52,9 @@ namespace ClaimsParser
             claimLines = this.RawClaim.Split(Environment.NewLine.ToCharArray()).ToList();
             string previousClaimId = string.Empty;
 
-            foreach (string line in claimLines)
+            foreach (string claimLine in claimLines)
             {
+                string line = claimLine.Trim('"');
                 Match currentClaimIdMatchResult = this.currentClaimIdRegex.Match(line);
                 if (currentClaimIdMatchResult.Success)
                 {
